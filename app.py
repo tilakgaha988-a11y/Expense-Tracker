@@ -75,6 +75,54 @@ if not df.empty:
         filtered_df.sort_values(by='Date', ascending=False),
         use_container_width=True
     )
+    
+    st.subheader("Edit Expense")
+
+if not df.empty:
+    selected_id = st.selectbox(
+        "Select row to edit",
+        df.index.tolist()
+    )
+
+    selected_row = df.loc[selected_id]
+
+    with st.form("edit_form"):
+        new_date = st.date_input("Date", selected_row["Date"])
+        new_category = st.selectbox(
+            "Category",
+            ["Food", "Travel", "Study", "Entertainment", "Transport", "Bills", "Others"],
+            index=["Food", "Travel", "Study", "Entertainment", "Transport", "Bills", "Others"].index(selected_row["Category"])
+        )
+        new_description = st.text_input("Description", selected_row["Description"])
+        new_amount = st.number_input("Amount", value=float(selected_row["Amount"]))
+
+        update = st.form_submit_button("Update")
+
+        if update:
+            df.at[selected_id, "Date"] = new_date
+            df.at[selected_id, "Category"] = new_category
+            df.at[selected_id, "Description"] = new_description
+            df.at[selected_id, "Amount"] = new_amount
+
+            df.to_csv(DATA_FILE, index=False)
+            st.success("Expense updated successfully!")
+            st.rerun()
+            
+    st.subheader("Delete Expense")
+
+if not df.empty:
+    delete_id = st.selectbox(
+        "Select row to delete",
+        df.index.tolist(),
+        key="delete_select"
+    )
+
+    if st.button("Delete Expense"):
+        df = df.drop(delete_id)
+
+        df.to_csv(DATA_FILE, index=False)
+        st.success("Expense deleted successfully!")
+        st.rerun()
 
     total = filtered_df['Amount'].sum()
     st.metric("Total Expenses", f"NPR {total:,.2f}")
@@ -177,44 +225,35 @@ if not df.empty:
         key="csv_download"
     )
 
-    # PDF Generator
-    def create_pdf(df_pdf):
+    def create_pdf(df):
         pdf = FPDF()
         pdf.add_page()
-
-        pdf.set_font("Arial", size=16)
-        pdf.cell(200, 10, "Expense Tracker Report", ln=True, align='C')
-
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, f"Generated: {datetime.today().strftime('%Y-%m-%d %H:%M')}", ln=True)
-        pdf.cell(200, 10, f"Total: NPR {df_pdf['Amount'].sum():,.2f}", ln=True)
-
-        pdf.ln(10)
-
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(35, 10, "Date", 1)
-        pdf.cell(35, 10, "Category", 1)
-        pdf.cell(70, 10, "Description", 1)
-        pdf.cell(40, 10, "Amount", 1, ln=True)
-
         pdf.set_font("Arial", size=10)
-        for _, row in df_pdf.iterrows():
-            pdf.cell(35, 10, str(row['Date'].date()), 1)
-            pdf.cell(35, 10, row['Category'], 1)
-            pdf.cell(70, 10, str(row['Description'])[:35], 1)
-            pdf.cell(40, 10, f"{row['Amount']:,.2f}", 1, ln=True)
 
-        return bytes(pdf.output())
+        for index, row in df.iterrows():
+             desc = row.get('Description', '')
+             line = f"{row['Date']} | {row['Category']} | {row['Amount']} | {desc}"
+             pdf.cell(200, 10, txt=line, ln=True)
 
+        output = pdf.output(dest='S')
+
+        if isinstance(output, str):
+            return output.encode('latin1')
+        else:
+            return bytes(output)       
+
+
+    # Create PDF
     pdf_bytes = create_pdf(filtered_df)
 
+    # Download button
     col2.download_button(
         "Download PDF",
         data=pdf_bytes,
         file_name=f"expense_report_{datetime.today().strftime('%Y-%m-%d')}.pdf",
         mime="application/pdf",
         key="pdf_download"
-    )
+)
 
 else:
-    st.info("No expenses found. Add some from the sidebar")
+    st.info("No expenses found. Add from the sidebar")
